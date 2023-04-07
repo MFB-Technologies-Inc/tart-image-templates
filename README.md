@@ -13,13 +13,7 @@ See a full list of VMs available on Cirrus CI [here](https://github.com/orgs/cir
 To build `macos-monterey-vanilla`:
 
 ```bash
-packer build templates/vanilla-monterey.pkr.hcl
-```
-
-To build `macos-ventura-vanilla`:
-
-```bash
-packer build templates/vanilla-ventura.pkr.hcl
+packer build -var macos_version="13.3.1" templates/vanilla.pkr.hcl
 ```
 
 Optionally, SIP can be disabled for each image by running the following commands:
@@ -42,4 +36,16 @@ packer build -var-file="variables.pkrvars.hcl" templates/base.pkr.hcl
 
 ```bash
 packer build -var-file="variables.pkrvars.hcl" templates/xcode.pkr.hcl
+```
+
+## Building Agent Image
+
+```bash
+packer build -var-file="variables.pkrvars.hcl" templates/agent.pkr.hcl
+```
+
+## Building Runner Image
+
+```bash
+packer build -var-file="variables.pkrvars.hcl" templates/runner.pkr.hcl
 ```

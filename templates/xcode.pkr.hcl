@@ -8,48 +8,110 @@ packer {
 }
 
 variable "macos_version" {
-  type =  string
+  type    = string
+  default = "13.3.1"
 }
 
 variable "xcode_version" {
-  type =  string
+  type    = string
+  default = "14.3"
 }
 
-variable "gha_version" {
-  type =  string
+variable "xcode_xip" {
+  type    = string
+  default = "" // local.remote_xcode_xip used when empty
 }
 
-variable "android_sdk_tools_version" {
-  type =  string
-  default = "9477386" # https://developer.android.com/studio/#command-tools
+variable "vm_base_name" {
+  type    = string
+  default = "" // local.default_vm_base_name used when empty
+}
+
+local "default_vm_base_name" {
+  expression = "${var.macos_version}-base"
+}
+
+variable "cpu_count" {
+  type    = number
+  default = 4
+}
+
+variable "memory_gb" {
+  type    = number
+  default = 8
+}
+
+variable "disk_size_gb" {
+  type    = number
+  default = 90
+}
+
+variable "ssh_username" {
+  type    = string
+  default = "admin"
+}
+
+variable "ssh_password" {
+  type    = string
+  default = "admin"
+}
+
+variable "ssh_timeout" {
+  type    = string
+  default = "120s"
 }
 
 source "tart-cli" "tart" {
-  vm_base_name = "${var.macos_version}-base"
+  vm_base_name = var.vm_base_name == "" ? local.default_vm_base_name : var.vm_base_name
   vm_name      = "${var.macos_version}-xcode:${var.xcode_version}"
-  cpu_count    = 4
-  memory_gb    = 8
-  disk_size_gb = 90
+  cpu_count    = var.cpu_count
+  memory_gb    = var.memory_gb
+  disk_size_gb = var.disk_size_gb
   headless     = true
-  ssh_password = "admin"
-  ssh_username = "admin"
-  ssh_timeout  = "120s"
+  ssh_password = var.ssh_password
+  ssh_username = var.ssh_username
+  ssh_timeout  = var.ssh_timeout
+}
+
+local "wget_xcode_install" {
+  expression = [
+    "echo 'export PATH=/usr/local/bin/:$PATH' >> ~/.zprofile",
+    "source ~/.zprofile",
+    "wget --quiet https://github.com/RobotsAndPencils/xcodes/releases/latest/download/xcodes.zip",
+    "unzip xcodes.zip",
+    "rm xcodes.zip",
+    "chmod +x xcodes",
+    "sudo mkdir -p /usr/local/bin/",
+    "sudo mv xcodes /usr/local/bin/xcodes",
+    "xcodes version",
+    "wget --quiet https://storage.googleapis.com/xcodes-cache/Xcode_${var.xcode_version}.xip",
+    "xcodes install ${var.xcode_version} --experimental-unxip --path $PWD/Xcode_${var.xcode_version}.xip",
+    "sudo rm -rf ~/.Trash/*",
+    "xcodes select ${var.xcode_version}",
+    "xcodebuild -runFirstLaunch",
+  ]
+}
+
+local "local_xcode_install" {
+  expression = [
+    "echo 'export PATH=/usr/local/bin/:$PATH' >> ~/.zprofile",
+    "source ~/.zprofile",
+    "wget --quiet https://github.com/RobotsAndPencils/xcodes/releases/latest/download/xcodes.zip",
+    "unzip xcodes.zip",
+    "rm xcodes.zip",
+    "chmod +x xcodes",
+    "sudo mkdir -p /usr/local/bin/",
+    "sudo mv xcodes /usr/local/bin/xcodes",
+    "xcodes version",
+    "xcodes install ${var.xcode_version} --experimental-unxip --path ${var.xcode_xip}",
+    "sudo rm -rf ~/.Trash/*",
+    "xcodes select ${var.xcode_version}",
+    "xcodebuild -runFirstLaunch"
+  ]
 }
 
 build {
   sources = ["source.tart-cli.tart"]
-
-  // re-install the actions runner
-  provisioner "shell" {
-    inline = [
-      "cd $HOME",
-      "rm -rf actions-runner",
-      "mkdir actions-runner && cd actions-runner",
-      "curl -O -L https://github.com/actions/runner/releases/download/v${var.gha_version}/actions-runner-osx-arm64-${var.gha_version}.tar.gz",
-      "tar xzf ./actions-runner-osx-arm64-${var.gha_version}.tar.gz",
-      "rm actions-runner-osx-arm64-${var.gha_version}.tar.gz",
-    ]
-  }
 
   provisioner "shell" {
     inline = [
@@ -58,74 +120,18 @@ build {
       "brew update",
       "brew upgrade",
       "brew install curl wget unzip zip ca-certificates",
-      "sudo softwareupdate --install-rosetta --agree-to-license"
     ]
   }
 
   provisioner "shell" {
-    inline = [
-      "source ~/.zprofile",
-      "brew install homebrew/cask-versions/temurin11",
-      "echo 'export ANDROID_HOME=$HOME/android-sdk' >> ~/.zprofile",
-      "echo 'export ANDROID_SDK_ROOT=$ANDROID_HOME' >> ~/.zprofile",
-      "echo 'export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator' >> ~/.zprofile",
-      "source ~/.zprofile",
-      "wget -q https://dl.google.com/android/repository/commandlinetools-mac-${var.android_sdk_tools_version}_latest.zip -O android-sdk-tools.zip",
-      "mkdir -p $ANDROID_HOME/cmdline-tools/",
-      "unzip -q android-sdk-tools.zip -d $ANDROID_HOME/cmdline-tools/",
-      "rm android-sdk-tools.zip",
-      "mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest",
-      "yes | sdkmanager --licenses",
-      "yes | sdkmanager 'platform-tools' 'platforms;android-33' 'build-tools;33.0.1' 'ndk;25.1.8937393'"
-    ]
+    inline = var.xcode_xip == "" ? local.wget_xcode_install : local.local_xcode_install
   }
-  provisioner "shell" {
-    inline = [
-      "echo 'export PATH=/usr/local/bin/:$PATH' >> ~/.zprofile",
-      "source ~/.zprofile",
-      "wget --quiet https://github.com/RobotsAndPencils/xcodes/releases/latest/download/xcodes.zip",
-      "unzip xcodes.zip",
-      "rm xcodes.zip",
-      "chmod +x xcodes",
-      "sudo mkdir -p /usr/local/bin/",
-      "sudo mv xcodes /usr/local/bin/xcodes",
-      "xcodes version",
-      "wget --quiet https://storage.googleapis.com/xcodes-cache/Xcode_${var.xcode_version}.xip",
-      "xcodes install ${var.xcode_version} --experimental-unxip --path $PWD/Xcode_${var.xcode_version}.xip",
-      "sudo rm -rf ~/.Trash/*",
-      "xcodes select ${var.xcode_version}",
-      "xcodebuild -downloadAllPlatforms",
-      "xcodebuild -runFirstLaunch",
-    ]
-  }
-  provisioner "shell" {
-    inline = [
-      "source ~/.zprofile",
-      "echo 'export FLUTTER_HOME=$HOME/flutter' >> ~/.zprofile",
-      "echo 'export PATH=$HOME/flutter:$HOME/flutter/bin/:$HOME/flutter/bin/cache/dart-sdk/bin:$PATH' >> ~/.zprofile",
-      "source ~/.zprofile",
-      "git clone https://github.com/flutter/flutter.git $FLUTTER_HOME",
-      "cd $FLUTTER_HOME",
-      "git checkout stable",
-      "flutter doctor --android-licenses",
-      "flutter doctor",
-      "flutter precache",
-    ]
-  }
-  provisioner "shell" {
-    inline = [
-      "source ~/.zprofile",
-      "brew install libimobiledevice ideviceinstaller ios-deploy fastlane carthage",
-      "sudo gem update",
-      "sudo gem install cocoapods",
-      "sudo gem uninstall --ignore-dependencies ffi && sudo gem install ffi -- --enable-libffi-alloc"
-    ]
-  }
+
   # inspired by https://github.com/actions/runner-images/blob/fb3b6fd69957772c1596848e2daaec69eabca1bb/images/macos/provision/configuration/configure-machine.sh#L33-L61
   provisioner "shell" {
     inline = [
       "source ~/.zprofile",
-      "sudo security delete-certificate -Z FF6797793A3CD798DC5B2ABEF56F73EDC9F83A64 /Library/Keychains/System.keychain",
+      //"sudo security delete-certificate -Z FF6797793A3CD798DC5B2ABEF56F73EDC9F83A64 /Library/Keychains/System.keychain",
       "curl -o add-certificate.swift https://raw.githubusercontent.com/actions/runner-images/fb3b6fd69957772c1596848e2daaec69eabca1bb/images/macos/provision/configuration/add-certificate.swift",
       "swiftc add-certificate.swift",
       "curl -o AppleWWDRCAG3.cer https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer",
@@ -139,7 +145,11 @@ build {
     inline = [
       "source ~/.zprofile",
       "brew doctor",
-      "flutter doctor"
+      "xcodebuild -version"
     ]
   }
+}
+
+local "remote_xcode_xip" {
+  expression = "https://storage.googleapis.com/xcodes-cache/Xcode_${var.xcode_version}.xip"
 }

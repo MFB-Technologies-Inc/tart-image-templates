@@ -8,22 +8,49 @@ packer {
 }
 
 variable "macos_version" {
-  type =  string
+  type    = string
+  default = "13.3.1"
 }
 
-variable "gha_version" {
-  type =  string
+variable "cpu_count" {
+  type    = number
+  default = 4
+}
+
+variable "memory_gb" {
+  type    = number
+  default = 8
+}
+
+variable "disk_size_gb" {
+  type    = number
+  default = 40
+}
+
+variable "ssh_username" {
+  type    = string
+  default = "admin"
+}
+
+variable "ssh_password" {
+  type    = string
+  default = "admin"
+}
+
+variable "ssh_timeout" {
+  type    = string
+  default = "120s"
 }
 
 source "tart-cli" "tart" {
-  vm_base_name = "ghcr.io/cirruslabs/macos-${var.macos_version}-vanilla:13.3"
+  vm_base_name = "${var.macos_version}-vanilla"
   vm_name      = "${var.macos_version}-base"
-  cpu_count    = 4
-  memory_gb    = 8
-  disk_size_gb = 50
-  ssh_password = "admin"
-  ssh_username = "admin"
-  ssh_timeout  = "120s"
+  cpu_count    = var.cpu_count
+  memory_gb    = var.memory_gb
+  disk_size_gb = var.disk_size_gb
+  ssh_password = var.ssh_password
+  ssh_username = var.ssh_username
+  ssh_timeout  = var.ssh_timeout
 }
 
 build {
@@ -53,15 +80,6 @@ build {
 
   provisioner "shell" {
     inline = [
-      "cd $HOME",
-      "mkdir actions-runner && cd actions-runner",
-      "curl -O -L https://github.com/actions/runner/releases/download/v${var.gha_version}/actions-runner-osx-arm64-${var.gha_version}.tar.gz",
-      "tar xzf ./actions-runner-osx-arm64-${var.gha_version}.tar.gz",
-      "rm actions-runner-osx-arm64-${var.gha_version}.tar.gz",
-    ]
-  }
-  provisioner "shell" {
-    inline = [
       "/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"",
       "echo \"export LANG=en_US.UTF-8\" >> ~/.zprofile",
       "echo 'eval \"$(/opt/homebrew/bin/brew shellenv)\"' >> ~/.zprofile",
@@ -69,22 +87,10 @@ build {
       "echo \"export HOMEBREW_NO_INSTALL_CLEANUP=1\" >> ~/.zprofile",
       "source ~/.zprofile",
       "brew --version",
-      "brew update",
-      "brew install wget cmake gcc git-lfs jq gh",
-      "git lfs install",
+      "brew update"
     ]
   }
-  provisioner "shell" {
-    inline = [
-      "source ~/.zprofile",
-      "brew install rbenv",
-      "echo 'if which rbenv > /dev/null; then eval \"$(rbenv init -)\"; fi' >> ~/.zprofile",
-      "source ~/.zprofile",
-      "rbenv install 3.0.5",
-      "rbenv global 3.0.5",
-      "gem install bundler",
-    ]
-  }
+
   provisioner "shell" {
     inline = [
       "sudo safaridriver --enable",

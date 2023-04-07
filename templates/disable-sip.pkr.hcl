@@ -8,15 +8,41 @@ packer {
 }
 
 variable "vm_name" {
-  type = string
+  type    = string
+  default = "disable-sip-vm"
+}
+
+variable "cpu_count" {
+  type    = number
+  default = 4
+}
+
+variable "memory_gb" {
+  type    = number
+  default = 8
+}
+
+variable "disk_size_gb" {
+  type    = number
+  default = 50
+}
+
+variable "ssh_username" {
+  type    = string
+  default = "admin"
+}
+
+variable "ssh_password" {
+  type    = string
+  default = "admin"
 }
 
 source "tart-cli" "tart" {
   vm_name      = "${var.vm_name}"
   recovery     = true
-  cpu_count    = 4
-  memory_gb    = 8
-  disk_size_gb = 50
+  cpu_count    = var.cpu_count
+  memory_gb    = var.memory_gb
+  disk_size_gb = var.disk_size_gb
   communicator = "none"
   boot_command = [
     # Skip over "Macintosh" and select "Options"
